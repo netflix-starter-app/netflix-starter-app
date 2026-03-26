@@ -1,72 +1,129 @@
-# OpenAPI Template
+netflix-starter-app/
+ ├── frontend/          ← put all frontend files here (or `public/` if template uses that)
+ │    ├── index.html
+ │    ├── movie.html
+ │    ├── admin.html
+ │    ├── style.css
+ │    └── app.js
+ └── backend/
+      └── worker.js      ← Worker code (0cc4f4e7-bff7-4edc-af55-88f25cac8204)
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/chanfana-openapi-template)
+    // GET all movies
+    if (url.pathname === "/movies") {
+      const { results } = await env.DB.prepare("SELECT * FROM movies").all();
+      return Response.json(results);
+    }
 
-![OpenAPI Template Preview](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/91076b39-1f5b-46f6-7f14-536a6f183000/public)
+    // GET all episodes for a movie
+    if (url.pathname.startsWith("/episodes")) {
+      const movieId = url.searchParams.get("movie_id");
+      const { results } = await env.DB.prepare(
+        "SELECT * FROM episodes WHERE movie_id = ?"
+      ).bind(movieId).all();
+      return Response.json(results);
+    }
 
-<!-- dash-content-start -->
+    // POST add movie (admin)
+    if (url.pathname === "/add-movie" && request.method === "POST") {
+      const data = await request.json();
+      await env.DB.prepare(
+        "INSERT INTO movies (title, image, description, category, type) VALUES (?, ?, ?, ?, ?)"
+      ).bind(data.title, data.image, data.description, data.category, data.type).run();
+      return new Response("Movie Added");
+    }
 
-This is a Cloudflare Worker with OpenAPI 3.1 Auto Generation and Validation using [chanfana](https://github.com/cloudflare/chanfana) and [Hono](https://github.com/honojs/hono).
+    // POST add episode (admin)
+    if (url.pathname === "/add-episode" && request.method === "POST") {
+      const data = await request.json();
+      await env.DB.prepare(
+        "INSERT INTO episodes (movie_id, episode_number, iframe_url) VALUES (?, ?, ?)"
+      ).bind(data.movie_id, data.episode_number, data.iframe_url).run();
+      return new Response("Episode Added");
+    }
+<!DOCTYPE html>
+<html>
+<head>
+  <title>streamflix</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>🎬 Movies</h1>
+<div id="movies"></div>
 
-This is an example project made to be used as a quick start into building OpenAPI compliant Workers that generates the
-`openapi.json` schema automatically from code and validates the incoming request to the defined parameters or request body.
+<script src="app.js"></script>
+<script>
+fetch("https://netflix-starter-app.bilalakhtar0308ml.workers.dev/movies")
+  .then(res => res.json())
+  .then(data => {
+    let html = "";
+    data.forEach(movie => {
+      html += `
+        <div class="movie-card">
+          <img src="${movie.image}" width="150">
+          <h3>${movie.title}</h3>
+          <a href="movie.html?id=${movie.id}">Watch</a>
+        </div>
+      `;
+    });
+    document.getElementById("movies").innerHTML = html;
+  });
+</script>
+</body>
+</html>
+    return new Response("Not Found", { status: 404 });
+  }
+};
+<h2>Admin Panel</h2>
 
-This template includes various endpoints, a D1 database, and integration tests using [Vitest](https://vitest.dev/) as examples. In endpoints, you will find [chanfana D1 AutoEndpoints](https://chanfana.com/endpoints/auto/d1) and a [normal endpoint](https://chanfana.com/endpoints/defining-endpoints) to serve as examples for your projects.
+<h3>Add Movie</h3>
+<input id="title" placeholder="Title"><br>
+<input id="image" placeholder="Image URL"><br>
+<input id="category" placeholder="Category"><br>
+<select id="type">
+  <option value="movie">Movie</option>
+  <option value="series">Series</option>
+</select><br>
+<button onclick="addMovie()">Add Movie</button>
 
-Besides being able to see the OpenAPI schema (openapi.json) in the browser, you can also extract the schema locally no hassle by running this command `npm run schema`.
+<h3>Add Episode</h3>
+<input id="movie_id" placeholder="Movie ID"><br>
+<input id="episode_number" placeholder="Episode Number"><br>
+<input id="iframe_url" placeholder="Iframe URL"><br>
+<button onclick="addEpisode()">Add Episode</button>
 
-<!-- dash-content-end -->
+<script src="app.js"></script>
+<script>
+function addMovie() {
+  fetch("https://netflix-starter-app.bilalakhtar0308ml.workers.dev/add-movie", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      title: document.getElementById("title").value,
+      image: document.getElementById("image").value,
+      description: "",
+      category: document.getElementById("category").value,
+      type: document.getElementById("type").value
+    })
+  }).then(()=>alert("Movie Added!"));
+}
 
-> [!IMPORTANT]
-> When using C3 to create this project, select "no" when it asks if you want to deploy. You need to follow this project's [setup steps](https://github.com/cloudflare/templates/tree/main/openapi-template#setup-steps) before deploying.
-
-## Getting Started
-
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/openapi-template
-```
-
-A live public deployment of this template is available at [https://openapi-template.templates.workers.dev](https://openapi-template.templates.workers.dev)
-
-## Setup Steps
-
-1. Install the project dependencies with a package manager of your choice:
-   ```bash
-   npm install
-   ```
-2. Create a [D1 database](https://developers.cloudflare.com/d1/get-started/) with the name "openapi-template-db":
-   ```bash
-   npx wrangler d1 create openapi-template-db
-   ```
-   ...and update the `database_id` field in `wrangler.json` with the new database ID.
-3. Run the following db migration to initialize the database (notice the `migrations` directory in this project):
-   ```bash
-   npx wrangler d1 migrations apply DB --remote
-   ```
-4. Deploy the project!
-   ```bash
-   npx wrangler deploy
-   ```
-5. Monitor your worker
-   ```bash
-   npx wrangler tail
-   ```
-
-## Testing
-
-This template includes integration tests using [Vitest](https://vitest.dev/). To run the tests locally:
-
-```bash
-npm run test
-```
-
-Test files are located in the `tests/` directory, with examples demonstrating how to test your endpoints and database interactions.
-
-## Project structure
-
-1. Your main router is defined in `src/index.ts`.
-2. Each endpoint has its own file in `src/endpoints/`.
-3. Integration tests are located in the `tests/` directory.
-4. For more information read the [chanfana documentation](https://chanfana.com/), [Hono documentation](https://hono.dev/docs), and [Vitest documentation](https://vitest.dev/guide/).
+function addEpisode() {
+  fetch("https://netflix-starter-app.bilalakhtar0308ml.workers.dev/add-episode", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      movie_id: document.getElementById("movie_id").value,
+      episode_number: document.getElementById("episode_number").value,
+      iframe_url: document.getElementById("iframe_url").value
+    })
+  }).then(()=>alert("Episode Added!"));
+}
+</script>
+body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+.movie-card { display: inline-block; margin: 10px; padding: 10px; background: white; border-radius: 5px; }
+button { margin: 5px; padding: 5px 10px; cursor: pointer; }
+input, select { margin: 5px 0; padding: 5px; }
+// Currently empty, you can add common JS functions here
