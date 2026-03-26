@@ -1,0 +1,16 @@
+{
+	"compatibility_date": "2025-10-08",
+	"main": "src/index.ts",
+	"name": "netflix-starter-app",
+	"upload_source_maps": true,
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "netflix-db",
+			"database_id": "0cc4f4e7-bff7-4edc-af55-88f25cac8204"
+		}
+	]
+}
